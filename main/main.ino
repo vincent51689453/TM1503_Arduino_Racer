@@ -37,17 +37,33 @@ float new_gz;
 
 
 //Interrupt Count
-int H1_IN_OUT = false;
+volatile bool H1_IN_OUT = false;
 int H1_start = 0;
 int H1_end = 0;
-int H1_period = 0;
+float H1_period = 0;
+int H1_idle = 0;
+int H1_old = 0;
 
-int H3_IN_OUT = false;
+volatile bool H2_IN_OUT = false;
+int H2_start = 0;
+int H2_end = 0;
+float H2_period = 0;
+int H2_idle = 0;
+int H2_old = 0;
+
+volatile bool H3_IN_OUT = false;
 int H3_start = 0;
 int H3_end = 0;
 float H3_period = 0;
 int H3_idle = 0;
 int H3_old = 0;
+
+volatile bool H4_IN_OUT = false;
+int H4_start = 0;
+int H4_end = 0;
+float H4_period = 0;
+int H4_idle = 0;
+int H4_old = 0;
 
 int hallout_pin = 0; // use D0 pin
 
@@ -102,21 +118,27 @@ void setup()
 
   pinMode(21, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(21), counter_log_21, FALLING);
+
+  pinMode(13, OUTPUT);
 }
 
 void counter_log_18()
 {
-  //Caculate the time between two falling edges
+  Serial.print("**********************");
+  //Calculate the time between two falling edges
   if(H1_IN_OUT == false)
   {
     H1_start = 0;
     H1_end = 0;
     H1_period = 0;
-    H1_start = micros();
+    H1_start = millis();
     H1_IN_OUT = true;
+    digitalWrite(13,LOW);
   }else{
-    H1_end = micros();
-    H1_period = H1_end-H1_start;
+    H1_end = millis();
+    H1_period = abs(H1_end-H1_start);
+    Serial.println(H1_period);
+    digitalWrite(13,HIGH);
     H1_IN_OUT = false;
   }
   //H1_hall_count+=1.0;
@@ -124,21 +146,34 @@ void counter_log_18()
 
 void counter_log_19()
 {
-  H2_hall_count+=1.0;
+  //Calculate the time between two falling edges
+  if(H2_IN_OUT == false)
+  {
+    H2_start = 0;
+    H2_end = 0;
+    H2_period = 0;
+    H2_start = millis();
+    H2_IN_OUT = true;
+  }else{
+    H2_end = millis();
+    H2_period = abs(H2_end-H2_start);
+    H2_IN_OUT = false;
+  }
+  //H2_hall_count+=1.0;
 }
 
 void counter_log_20()
 {
-  //Caculate the time between two falling edges
+  //Calculate the time between two falling edges
   if(H3_IN_OUT == false)
   {
     H3_start = 0;
     H3_end = 0;
     H3_period = 0;
-    H3_start = micros();
+    H3_start = millis();
     H3_IN_OUT = true;
   }else{
-    H3_end = micros();
+    H3_end = millis();
     H3_period = abs(H3_end-H3_start);
     H3_IN_OUT = false;
   }
@@ -147,7 +182,20 @@ void counter_log_20()
 
 void counter_log_21()
 {
-  H4_hall_count+=1.0;
+  //Calculate the time between two falling edges
+  if(H4_IN_OUT == false)
+  {
+    H4_start = 0;
+    H4_end = 0;
+    H4_period = 0;
+    H4_start = millis();
+    H4_IN_OUT = true;
+  }else{
+    H4_end = millis();
+    H4_period = abs(H4_end-H4_start);
+    H4_IN_OUT = false;
+  }
+  //H4_hall_count+=1.0;
 }
 //=========================================
 
@@ -226,6 +274,7 @@ int curve_plotting(float a,float b,float c,float rpm_1,float rpm_2, float rpm_3,
 
 void loop()
 {
+  
   bluetooth_control();
 
   //gyro sensor work
@@ -269,7 +318,45 @@ void loop()
     capture_Gz = Gz - gz_offset;    
   }
 
- //Reset H3 period if no more interrupts were found
+  //Reset H1 period if no more interrupts were found
+  if(H1_period == H1_old)
+  {
+    H1_idle += 1;
+  }
+  if(H1_idle >= 500)
+  {
+    H1_period = 0;
+    H1_idle = 0;
+  }
+  //Find H1 rpm
+  float wheel_H1 = 0.00;
+  if(H1_period == 0.0)
+  {
+     wheel_H1 = 0.0; 
+  }else{
+     wheel_H1 = 1.0/((H1_period/1000)/60.0); //TO-DO: Define pulse for a rotation
+  }
+  
+  //Reset H2 period if no more interrupts were found
+  if(H2_period == H2_old)
+  {
+    H2_idle += 1;
+  }
+  if(H2_idle >= 500)
+  {
+    H2_period = 0;
+    H2_idle = 0;
+  }
+  //Find H2 rpm
+  float wheel_H2 = 0.00;
+  if(H2_period == 0.0)
+  {
+     wheel_H2 = 0.0; 
+  }else{
+     wheel_H2 = 1/((H2_period/1000)/60); //TO-DO: Define pulse for a rotation
+  }
+
+  //Reset H3 period if no more interrupts were found
   if(H3_period == H3_old)
   {
     H3_idle += 1;
@@ -279,24 +366,48 @@ void loop()
     H3_period = 0;
     H3_idle = 0;
   }
-  Serial.print("H3 Frequency:");
-  Serial.print(H3_period,6);
-  Serial.print("us");
-
+  //Find H3 rpm
   float wheel_H3 = 0.00;
   if(H3_period == 0.0)
   {
      wheel_H3 = 0.0; 
   }else{
-     wheel_H3 = 1/((H3_period/1000000)*60);
+     wheel_H3 = 1/((H3_period/1000)/60); //TO-DO: Define pulse for a rotation
   }
 
-  Serial.print("-> RPM:");
-  Serial.println(wheel_H3,6);
+  //Reset H4 period if no more interrupts were found
+  if(H4_period == H4_old)
+  {
+    H4_idle += 1;
+  }
+  if(H4_idle >= 500)
+  {
+    H4_period = 0;
+    H4_idle = 0;
+  }
+  //Find H4 rpm
+  float wheel_H4 = 0.00;
+  if(H4_period == 0.0)
+  {
+     wheel_H4 = 0.0; 
+  }else{
+     wheel_H4 = 1/((H4_period/1000)/60); //TO-DO: Define pulse for a rotation
+  }
 
+  Serial.print("Wheel H1(Pulse per minute): ");
+  Serial.print(wheel_H1);
+  Serial.print("  Wheel H2(Pulse per minute): ");
+  Serial.print(wheel_H2);
+  Serial.print("  Wheel H3(Pulse per minute): ");
+  Serial.print(wheel_H3);
+  Serial.print("  Wheel H4(Pulse per minute): ");
+  Serial.println(wheel_H4);
+
+  curve_plotting(new_gx,new_gy,new_gz,wheel_H1,wheel_H2,wheel_H3,wheel_H4);
+  
+  H1_old = H1_period;
+  H2_old = H2_period;
   H3_old = H3_period;
-
-
-
+  H4_old = H4_period;
 
 }
